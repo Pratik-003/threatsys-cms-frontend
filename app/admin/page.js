@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { API_BASE_URL } from '../../src/utils/api';
 
+// --- SECURITY KEY (Must match backend/.env) ---
+const ADMIN_KEY = 'threatsys_super_secure_key_2025';
+
 export default function AdminPanel() {
   // --- AUTH STATE ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -17,11 +20,11 @@ export default function AdminPanel() {
   // ==========================================================
   const [pages, setPages] = useState([]);
   const [selectedSlug, setSelectedSlug] = useState('');
-  const [pageData, setPageData] = useState(null); 
+  const [pageData, setPageData] = useState(null);
   
   // Blog Mode
   const [isBlogMode, setIsBlogMode] = useState(false);
-  const [blogPosts, setBlogPosts] = useState([]); 
+  const [blogPosts, setBlogPosts] = useState([]);
   const [editingPostIndex, setEditingPostIndex] = useState(-1);
   const [postForm, setPostForm] = useState({
     title: '', slug: '', category: 'CYBER SECURITY', date: '', image: '', summary: '', content: ''
@@ -58,15 +61,32 @@ export default function AdminPanel() {
     fetch(`${API_BASE_URL}/api/pages`)
       .then(res => res.json())
       .then(data => {
-        setPages(data);
-        if (data.length > 0) handlePageSelect(data[0].slug);
-      });
+        if (Array.isArray(data)) {
+            setPages(data);
+            if (data.length > 0) handlePageSelect(data[0].slug);
+        }
+      })
+      .catch(err => console.error("Failed to fetch pages:", err));
   };
 
   const fetchCertificates = () => {
-    fetch(`${API_BASE_URL}/api/admin/certificates`)
+    // FIX: Added headers with Admin Key
+    fetch(`${API_BASE_URL}/api/admin/certificates`, {
+        headers: {
+            'x-admin-key': ADMIN_KEY
+        }
+    })
       .then(res => res.json())
-      .then(data => setCertificates(data));
+      .then(data => {
+        // FIX: Check if data is actually an array before setting state
+        if (Array.isArray(data)) {
+            setCertificates(data);
+        } else {
+            console.error("API Error:", data);
+            setCertificates([]); // Prevent crash
+        }
+      })
+      .catch(err => console.error("Failed to fetch certs:", err));
   };
 
   // ==========================================================
@@ -157,9 +177,13 @@ export default function AdminPanel() {
   };
 
   const sendUpdate = (payload) => {
+    // FIX: Added headers with Admin Key
     fetch(`${API_BASE_URL}/api/admin/update/${selectedSlug}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-admin-key': ADMIN_KEY 
+      },
       body: JSON.stringify(payload)
     })
     .then(res => res.json())
@@ -181,9 +205,13 @@ export default function AdminPanel() {
        ? `${API_BASE_URL}/api/admin/certificates?id=${certForm.cert_id}`
        : `${API_BASE_URL}/api/admin/certificates`;
 
+    // FIX: Added headers with Admin Key
     fetch(url, {
        method: method,
-       headers: { 'Content-Type': 'application/json' },
+       headers: { 
+         'Content-Type': 'application/json',
+         'x-admin-key': ADMIN_KEY 
+       },
        body: JSON.stringify(certForm)
     }).then(() => {
        setMessage("✅ Certificate Saved!");
@@ -195,7 +223,14 @@ export default function AdminPanel() {
 
   const deleteCertificate = (id) => {
     if(!confirm("Delete this certificate?")) return;
-    fetch(`${API_BASE_URL}/api/admin/certificates?id=${id}`, { method: 'DELETE' })
+    
+    // FIX: Added headers with Admin Key
+    fetch(`${API_BASE_URL}/api/admin/certificates?id=${id}`, { 
+        method: 'DELETE',
+        headers: {
+            'x-admin-key': ADMIN_KEY
+        }
+    })
       .then(() => fetchCertificates());
   };
 
@@ -301,8 +336,8 @@ export default function AdminPanel() {
                 // STANDARD PAGE EDITOR UI
                 <div className="bg-white p-6 rounded-lg shadow space-y-6">
                   <div className="border-b pb-4">
-                     <h2 className="text-xl font-bold text-[#1e1b4b]">Edit Page Content</h2>
-                     <p className="text-sm text-gray-500">Editing: <span className="font-mono bg-gray-100 px-1 rounded">{selectedSlug}</span></p>
+                      <h2 className="text-xl font-bold text-[#1e1b4b]">Edit Page Content</h2>
+                      <p className="text-sm text-gray-500">Editing: <span className="font-mono bg-gray-100 px-1 rounded">{selectedSlug}</span></p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div><label className="block text-sm font-bold text-gray-700">Page Title</label><input type="text" className="w-full border p-2 rounded" value={simpleForm.title} onChange={e => setSimpleForm({...simpleForm, title: e.target.value})} /></div>
@@ -311,11 +346,11 @@ export default function AdminPanel() {
                   <div><label className="block text-sm font-bold text-gray-700">Hero Heading</label><input type="text" className="w-full border p-2 rounded font-lg" value={simpleForm.hero_heading} onChange={e => setSimpleForm({...simpleForm, hero_heading: e.target.value})} /></div>
                   <div><label className="block text-sm font-bold text-gray-700">Hero Subtext</label><textarea className="w-full border p-2 rounded h-24" value={simpleForm.hero_subtext} onChange={e => setSimpleForm({...simpleForm, hero_subtext: e.target.value})} /></div>
                   <div className="border-t pt-6 mt-4">
-                     <label className="flex justify-between items-center text-sm font-bold text-gray-700 mb-2">
+                      <label className="flex justify-between items-center text-sm font-bold text-gray-700 mb-2">
                         <span>Detailed Sections (JSON)</span>
                         {selectedSlug === 'home' && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded border border-yellow-200">💡 Edit Clients, Awards, Testimonials</span>}
-                     </label>
-                     <textarea className="w-full border p-4 rounded h-96 font-mono bg-[#1e1b4b] text-green-400 text-xs leading-relaxed" value={simpleForm.json_sections} onChange={e => setSimpleForm({...simpleForm, json_sections: e.target.value})} />
+                      </label>
+                      <textarea className="w-full border p-4 rounded h-96 font-mono bg-[#1e1b4b] text-green-400 text-xs leading-relaxed" value={simpleForm.json_sections} onChange={e => setSimpleForm({...simpleForm, json_sections: e.target.value})} />
                   </div>
                   <button onClick={saveStandardPage} className="w-full bg-[#1e1b4b] text-white py-4 rounded font-bold hover:bg-blue-900 shadow-lg">Save All Changes</button>
                 </div>
@@ -336,15 +371,20 @@ export default function AdminPanel() {
                   <h3 className="font-bold text-gray-500 uppercase text-xs">Existing Certificates</h3>
                   <button onClick={() => setCertForm({ cert_id: '', company_name: '', address: '', scope: '', issue_date: '', expiry_date: '' })} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300">Clear Form</button>
                 </div>
-                {certificates.map(c => (
-                  <div key={c.cert_id} className="border-b py-3 flex justify-between items-center group">
-                    <div onClick={() => editCertificate(c)} className="cursor-pointer">
-                      <div className="font-bold text-sm text-[#1e1b4b] group-hover:text-blue-600">{c.company_name}</div>
-                      <div className="text-xs text-gray-500">{c.cert_id}</div>
-                    </div>
-                    <button onClick={() => deleteCertificate(c.cert_id)} className="text-red-400 hover:text-red-600 text-xs font-bold px-2">✕</button>
-                  </div>
-                ))}
+                {/* FIX: This check prevents the map error */}
+                {Array.isArray(certificates) && certificates.length > 0 ? (
+                    certificates.map(c => (
+                      <div key={c.cert_id} className="border-b py-3 flex justify-between items-center group">
+                        <div onClick={() => editCertificate(c)} className="cursor-pointer">
+                          <div className="font-bold text-sm text-[#1e1b4b] group-hover:text-blue-600">{c.company_name}</div>
+                          <div className="text-xs text-gray-500">{c.cert_id}</div>
+                        </div>
+                        <button onClick={() => deleteCertificate(c.cert_id)} className="text-red-400 hover:text-red-600 text-xs font-bold px-2">✕</button>
+                      </div>
+                    ))
+                ) : (
+                    <div className="text-center text-gray-400 py-10 text-sm">No certificates found.</div>
+                )}
              </div>
 
              {/* RIGHT: CERTIFICATE FORM */}
